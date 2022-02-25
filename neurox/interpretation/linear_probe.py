@@ -14,8 +14,10 @@ from torch.autograd import Variable
 from . import metrics
 from . import utils
 
+
 class LinearProbe(nn.Module):
     """Torch model for linear probe"""
+
     def __init__(self, input_size, num_classes):
         """Initialize a linear model"""
         super(LinearProbe, self).__init__()
@@ -25,6 +27,7 @@ class LinearProbe(nn.Module):
         """Run a forward pass on the model"""
         out = self.linear(x)
         return out
+
 
 ################################# Regularizers #################################
 def l1_penalty(var):
@@ -44,6 +47,7 @@ def l1_penalty(var):
 
     """
     return torch.abs(var).sum()
+
 
 def l2_penalty(var):
     """
@@ -70,6 +74,7 @@ def l2_penalty(var):
     """
     return torch.sqrt(torch.pow(var, 2).sum())
 
+
 ############################ Training and Evaluation ###########################
 def _train_probe(
     X_train,
@@ -89,7 +94,7 @@ def _train_probe(
     is trained with Cross Entropy loss for classification tasks and a linear
     regression model is trained with MSE loss for regression tasks. The
     optimizer used is Adam with default ``torch.optim`` hyperparameters.
-    On GPU, the probe is trained with mixed precision (amp). 
+    On GPU, the probe is trained with mixed precision (amp).
     The individual batches generated from the X_train inputs are converted to flaot32, such that
     the full X_train can be stored in another dtype, such as float16.
 
@@ -117,7 +122,7 @@ def _train_probe(
     batch_size : int, optional
         Batch size for the input to the linear model. Defaults to 32
     learning_rate : float, optional
-        Learning rate for optimizing the linear model. 
+        Learning rate for optimizing the linear model.
 
     Returns
     -------
@@ -164,7 +169,7 @@ def _train_probe(
     X_tensor = torch.from_numpy(X_train)
     y_tensor = torch.from_numpy(y_train)
 
-    scaler = torch.cuda.amp.GradScaler() # Mixed precision
+    scaler = torch.cuda.amp.GradScaler()  # Mixed precision
     for epoch in range(num_epochs):
         num_tokens = 0
         avg_loss = 0
@@ -182,8 +187,8 @@ def _train_probe(
 
             # Forward + Backward + Optimize
             optimizer.zero_grad()
-            
-            with torch.cuda.amp.autocast(): # for mixed precision
+
+            with torch.cuda.amp.autocast():  # for mixed precision
                 outputs = probe(inputs)
                 if task_type == "regression":
                     outputs = outputs.squeeze()
@@ -206,6 +211,7 @@ def _train_probe(
         )
 
     return probe
+
 
 def train_logistic_regression_probe(
     X_train,
@@ -248,7 +254,7 @@ def train_logistic_regression_probe(
     batch_size : int, optional
         Batch size for the input to the linear model. Defaults to 32
     learning_rate : float, optional
-        Learning rate for optimizing the linear model. 
+        Learning rate for optimizing the linear model.
 
     Returns
     -------
@@ -307,7 +313,7 @@ def train_linear_regression_probe(
     batch_size : int, optional
         Batch size for the input to the linear model. Defaults to 32
     learning_rate : float, optional
-        Learning rate for optimizing the linear model. 
+        Learning rate for optimizing the linear model.
 
     Returns
     -------
@@ -343,11 +349,11 @@ def evaluate_probe(
     This method evaluates a trained probe on the given data, and supports
     several standard metrics.
 
-    Precision with which the probe is evaluated may depend on the dtype of the 
+    Precision with which the probe is evaluated may depend on the dtype of the
     input X, and on whether GPU is available.
     If GPU is used and X is in float16, evaluation is run in half precision.
     If GPU is used and X is in float32, evaluation is run in full precision.
-    If no GPU is used, X is converted from float16 to float32, if necessary 
+    If no GPU is used, X is converted from float16 to float32, if necessary
     (half precision is not available for CPU).
 
     Parameters
@@ -389,7 +395,7 @@ def evaluate_probe(
         class and their associated scores are also part of the dictionary.
     predictions : list of 3-tuples, optional
         If ``return_predictions`` is set to True, this list will contain a
-        3-tuple for every input sample, representing 
+        3-tuple for every input sample, representing
         ``(source_token, predicted_class, was_predicted_correctly)``
 
     """
@@ -400,7 +406,7 @@ def evaluate_probe(
 
     if use_gpu:
         probe = probe.cuda()
-        if X.dtype == 'float16': # cuda, fp16 in X: perform eval in half precision
+        if X.dtype == "float16":  # cuda, fp16 in X: perform eval in half precision
             probe = probe.half()
 
     # Test the Model
@@ -417,7 +423,7 @@ def evaluate_probe(
         predictions = []
         src_word = -1
 
-    convert_to_full_precision = not(use_gpu) and X.dtype=='float16'
+    convert_to_full_precision = not (use_gpu) and X.dtype == "float16"
     for inputs, labels in progressbar(
         utils.batch_generator(
             torch.from_numpy(X), torch.from_numpy(y), batch_size=batch_size
@@ -484,6 +490,7 @@ def evaluate_probe(
     if return_predictions:
         return class_scores, predictions
     return class_scores
+
 
 ############################### Neuron Selection ###############################
 def get_top_neurons(probe, percentage, class_to_idx):
@@ -556,7 +563,7 @@ def get_top_neurons_hard_threshold(probe, fraction, class_to_idx):
 
     This method returns the set of all top neurons based on the given threshold.
     All neurons that have a weight above ``threshold * max_weight`` are
-    considered as top neurons. It also returns top neurons per class. 
+    considered as top neurons. It also returns top neurons per class.
 
     .. note::
         Absolute weight values are used for selection, instead of raw signed
@@ -586,8 +593,7 @@ def get_top_neurons_hard_threshold(probe, fraction, class_to_idx):
     top_neurons = {}
     for c in class_to_idx:
         top_neurons[c] = np.where(
-            weights[class_to_idx[c], :]
-            > np.max(weights[class_to_idx[c], :]) / fraction
+            weights[class_to_idx[c], :] > np.max(weights[class_to_idx[c], :]) / fraction
         )[0]
 
     top_neurons_union = set()
@@ -699,9 +705,9 @@ def get_neuron_ordering(probe, class_to_idx, search_stride=100):
     percentages of the weight mass and then accumulated in-order. See given
     reference for a complete description of the selection algorithm.
 
-    For example, if the neuron list at 1% weight mass is [#2, #52, #134], and 
+    For example, if the neuron list at 1% weight mass is [#2, #52, #134], and
     at 2% weight mass is [#2, #4, #52, #123, #130, #134, #567], the returned
-    ordering will be [#2, #52, #134, #4, #123, #130, #567]. 
+    ordering will be [#2, #52, #134, #4, #123, #130, #567].
     Within each percentage, the ordering of neurons is arbitrary. In this case,
     the importance of #2, #52 and #134 is not necessarily in that order.
     The cutoffs between each percentage selection are also returned. Increasing
@@ -827,6 +833,7 @@ def get_neuron_ordering_granular(
             cutoffs.append(len(ordering))
 
     return ordering, cutoffs
+
 
 # Returns num_bottom_neurons bottom neurons from the global ordering
 def get_fixed_number_of_bottom_neurons(probe, num_bottom_neurons, class_to_idx):

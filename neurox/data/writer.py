@@ -84,7 +84,13 @@ class ActivationsWriter:
         raise NotImplementedError("Use a specific writer or the `get_writer` method.")
 
     @staticmethod
-    def get_writer(filename, filetype=None, decompose_layers=False, filter_layers=None, dtype='float32'):
+    def get_writer(
+        filename,
+        filetype=None,
+        decompose_layers=False,
+        filter_layers=None,
+        dtype="float32",
+    ):
         """Method to get the correct writer based on filename and filetype"""
         return ActivationsWriterManager(
             filename, filetype, decompose_layers, filter_layers, dtype=dtype
@@ -123,7 +129,12 @@ class ActivationsWriterManager(ActivationsWriter):
     """
 
     def __init__(
-        self, filename, filetype=None, decompose_layers=False, filter_layers=None, dtype='float32'
+        self,
+        filename,
+        filetype=None,
+        decompose_layers=False,
+        filter_layers=None,
+        dtype="float32",
     ):
         super().__init__(
             filename,
@@ -167,11 +178,17 @@ class ActivationsWriterManager(ActivationsWriter):
         if self.decompose_layers:
             for writer_idx, layer_idx in enumerate(self.layers):
                 self.writers[writer_idx].write_activations(
-                    sentence_idx, extracted_words, activations[layer_idx, :, :], dtype=self.dtype
+                    sentence_idx,
+                    extracted_words,
+                    activations[layer_idx, :, :],
+                    dtype=self.dtype,
                 )
         else:
             self.writers[0].write_activations(
-                sentence_idx, extracted_words, activations[self.layers, :, :], dtype=self.dtype
+                sentence_idx,
+                extracted_words,
+                activations[self.layers, :, :],
+                dtype=self.dtype,
             )
 
     def close(self):
@@ -192,7 +209,9 @@ class HDF5ActivationsWriter(ActivationsWriter):
         self.activations_file = h5py.File(self.filename, "w")
         self.sentence_to_index = {}
 
-    def write_activations(self, sentence_idx, extracted_words, activations, dtype='float32'):
+    def write_activations(
+        self, sentence_idx, extracted_words, activations, dtype="float32"
+    ):
         if self.activations_file is None:
             self.open()
 
@@ -231,7 +250,9 @@ class JSONActivationsWriter(ActivationsWriter):
     def open(self):
         self.activations_file = open(self.filename, "w", encoding="utf-8")
 
-    def write_activations(self, sentence_idx, extracted_words, activations, dtype='float32'):
+    def write_activations(
+        self, sentence_idx, extracted_words, activations, dtype="float32"
+    ):
         if self.activations_file is None:
             self.open()
 
