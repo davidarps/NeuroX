@@ -208,6 +208,7 @@ class HDF5ActivationsWriter(ActivationsWriter):
             final_sentence = f"{sentence} (Occurrence {counter})"
         sentence = final_sentence
         self.sentence_to_index[sentence] = str(sentence_idx)
+        del activations
 
     def close(self):
         sentence_index_dataset = self.activations_file.create_dataset(

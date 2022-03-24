@@ -292,7 +292,7 @@ def extract_representations(
         print("# Extracted words: ", len(extracted_words))
 
         writer.write_activations(sentence_idx, extracted_words, hidden_states)
-
+        del hidden_states
     writer.close()
 
 
