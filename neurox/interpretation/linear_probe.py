@@ -14,8 +14,10 @@ from torch.autograd import Variable
 from . import metrics
 from . import utils
 
+
 class LinearProbe(nn.Module):
     """Torch model for linear probe"""
+
     def __init__(self, input_size, num_classes):
         """Initialize a linear model"""
         super(LinearProbe, self).__init__()
@@ -25,6 +27,7 @@ class LinearProbe(nn.Module):
         """Run a forward pass on the model"""
         out = self.linear(x)
         return out
+
 
 ################################# Regularizers #################################
 def l1_penalty(var):
@@ -44,6 +47,7 @@ def l1_penalty(var):
 
     """
     return torch.abs(var).sum()
+
 
 def l2_penalty(var):
     """
@@ -70,6 +74,7 @@ def l2_penalty(var):
     """
     return torch.sqrt(torch.pow(var, 2).sum())
 
+
 ############################ Training and Evaluation ###########################
 def _train_probe(
     X_train,
@@ -89,6 +94,9 @@ def _train_probe(
     is trained with Cross Entropy loss for classification tasks and a linear
     regression model is trained with MSE loss for regression tasks. The
     optimizer used is Adam with default ``torch.optim`` hyperparameters.
+    On GPU, the probe is trained with mixed precision (amp).
+    The individual batches generated from the X_train inputs are converted to flaot32, such that
+    the full X_train can be stored in another dtype, such as float16.
 
     Parameters
     ----------
@@ -157,6 +165,7 @@ def _train_probe(
     X_tensor = torch.from_numpy(X_train)
     y_tensor = torch.from_numpy(y_train)
 
+    scaler = torch.cuda.amp.GradScaler()  # Mixed precision
     for epoch in range(num_epochs):
         num_tokens = 0
         avg_loss = 0
@@ -168,23 +177,27 @@ def _train_probe(
             if use_gpu:
                 inputs = inputs.cuda()
                 labels = labels.cuda()
+            inputs = inputs.float()
             inputs = Variable(inputs)
             labels = Variable(labels)
 
             # Forward + Backward + Optimize
             optimizer.zero_grad()
-            outputs = probe(inputs)
-            if task_type == "regression":
-                outputs = outputs.squeeze()
-            weights = list(probe.parameters())[0]
 
-            loss = (
-                criterion(outputs, labels)
-                + lambda_l1 * l1_penalty(weights)
-                + lambda_l2 * l2_penalty(weights)
-            )
-            loss.backward()
-            optimizer.step()
+            with torch.cuda.amp.autocast():  # for mixed precision
+                outputs = probe(inputs)
+                if task_type == "regression":
+                    outputs = outputs.squeeze()
+                weights = list(probe.parameters())[0]
+
+                loss = (
+                    criterion(outputs, labels)
+                    + lambda_l1 * l1_penalty(weights)
+                    + lambda_l2 * l2_penalty(weights)
+                )
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
             avg_loss += loss.item()
 
@@ -194,6 +207,7 @@ def _train_probe(
         )
 
     return probe
+
 
 def train_logistic_regression_probe(
     X_train,
@@ -331,6 +345,13 @@ def evaluate_probe(
     This method evaluates a trained probe on the given data, and supports
     several standard metrics.
 
+    Precision with which the probe is evaluated may depend on the dtype of the
+    input X, and on whether GPU is available.
+    If GPU is used and X is in float16, evaluation is run in half precision.
+    If GPU is used and X is in float32, evaluation is run in full precision.
+    If no GPU is used, X is converted from float16 to float32, if necessary
+    (half precision is not available for CPU).
+
     Parameters
     ----------
     probe : interpretation.linear_probe.LinearProbe
@@ -338,7 +359,7 @@ def evaluate_probe(
     X : numpy.ndarray
         Numpy Matrix of size [``NUM_TOKENS`` x ``NUM_NEURONS``]. Usually the
         output of ``interpretation.utils.create_tensors``. ``dtype`` of the
-        matrix must be ``np.float32``
+        matrix must be ``np.float32`` or ``np.float16``
     y : numpy.ndarray
         Numpy Vector of size [``NUM_TOKENS``] with class labels for each input
         token. For classification, 0-indexed class labels for each input token
@@ -381,6 +402,8 @@ def evaluate_probe(
 
     if use_gpu:
         probe = probe.cuda()
+        if X.dtype == "float16":  # cuda, fp16 in X: perform eval in half precision
+            probe = probe.half()
 
     # Test the Model
     y_pred = []
@@ -396,6 +419,7 @@ def evaluate_probe(
         predictions = []
         src_word = -1
 
+    convert_to_full_precision = not (use_gpu) and X.dtype == "float16"
     for inputs, labels in progressbar(
         utils.batch_generator(
             torch.from_numpy(X), torch.from_numpy(y), batch_size=batch_size
@@ -405,6 +429,8 @@ def evaluate_probe(
         if use_gpu:
             inputs = inputs.cuda()
             labels = labels.cuda()
+        elif convert_to_full_precision:
+            inputs = inputs.float()
         inputs = Variable(inputs)
         labels = Variable(labels)
 
@@ -460,6 +486,7 @@ def evaluate_probe(
     if return_predictions:
         return class_scores, predictions
     return class_scores
+
 
 ############################### Neuron Selection ###############################
 def get_top_neurons(probe, percentage, class_to_idx):
@@ -562,8 +589,7 @@ def get_top_neurons_hard_threshold(probe, fraction, class_to_idx):
     top_neurons = {}
     for c in class_to_idx:
         top_neurons[c] = np.where(
-            weights[class_to_idx[c], :]
-            > np.max(weights[class_to_idx[c], :]) / fraction
+            weights[class_to_idx[c], :] > np.max(weights[class_to_idx[c], :]) / fraction
         )[0]
 
     top_neurons_union = set()
@@ -803,6 +829,7 @@ def get_neuron_ordering_granular(
             cutoffs.append(len(ordering))
 
     return ordering, cutoffs
+
 
 # Returns num_bottom_neurons bottom neurons from the global ordering
 def get_fixed_number_of_bottom_neurons(probe, num_bottom_neurons, class_to_idx):

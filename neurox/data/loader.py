@@ -11,7 +11,9 @@ import numpy as np
 import torch
 
 
-def load_activations(activations_path, num_neurons_per_layer=None, is_brnn=False):
+def load_activations(
+    activations_path, num_neurons_per_layer=None, is_brnn=False, dtype=None
+):
     """Load extracted activations.
 
     Parameters
@@ -23,6 +25,11 @@ def load_activations(activations_path, num_neurons_per_layer=None, is_brnn=False
         This is only necessary in the case of t7/p5/acts activations.
     is_brnn : bool, optional
         If the model used to extract activations was bidirectional (default: False)
+    dtype : str, optional
+        Only implemented for hdf5 and json files. Default: None
+        None if the dtype of the activation should be the same dtype as in the activations file (only relevant for hdf5)
+        'float16' or 'float32' to enforce half-precision or full-precision floats
+
 
     Returns
     -------
@@ -91,6 +98,8 @@ def load_activations(activations_path, num_neurons_per_layer=None, is_brnn=False
         representations = h5py.File(activations_path, "r")
         sentence_to_index = json.loads(representations.get("sentence_to_index")[0])
         activations = []
+        if dtype == None:
+            dtype = representations[list(sentence_to_index.values())[0]].dtype
         # TODO: Check order
         for _, value in sentence_to_index.items():
             sentence_acts = torch.FloatTensor(representations[value])
@@ -104,9 +113,10 @@ def load_activations(activations_path, num_neurons_per_layer=None, is_brnn=False
             sentence_acts = sentence_acts.reshape(
                 sentence_length, num_layers * embedding_size
             )
-            activations.append(sentence_acts.numpy())
+            activations.append(sentence_acts.numpy().astype(dtype))
         num_layers = len(activations[0][0]) / num_neurons_per_layer
     elif file_ext == "json":
+        dtype = "float32" if dtype == None else dtype
         print("Loading json activations from %s..." % (activations_path))
         activations = []
         with open(activations_path) as fp:
@@ -118,7 +128,7 @@ def load_activations(activations_path, num_neurons_per_layer=None, is_brnn=False
                     token_acts.append(
                         np.concatenate([l["values"] for l in act["layers"]])
                     )
-                activations.append(np.vstack(token_acts))
+                activations.append(np.vstack(token_acts).astype(dtype))
 
         num_layers = activations[0].shape[1] / num_neurons_per_layer
         print(len(activations), num_layers)
@@ -126,6 +136,7 @@ def load_activations(activations_path, num_neurons_per_layer=None, is_brnn=False
         assert False, "Activations must be of type t7, pt, acts, json or hdf5"
 
     return activations, int(num_layers)
+
 
 def filter_activations_by_layers(
     train_activations, test_activations, filter_layers, rnn_size, num_layers, is_brnn
@@ -292,14 +303,19 @@ def load_aux_data(
 
     assert len(tokens["source_aux"]) == len(tokens["source"]) and len(
         tokens["source_aux"]
-    ) == len(tokens["target"]), (
-        "Number of lines do not match (source: %d, aux: %d, target: %d)!"
-        % (len(tokens["source"]), len(tokens["source_aux"]), len(tokens["target"]))
+    ) == len(
+        tokens["target"]
+    ), "Number of lines do not match (source: %d, aux: %d, target: %d)!" % (
+        len(tokens["source"]),
+        len(tokens["source_aux"]),
+        len(tokens["target"]),
     )
 
-    assert len(activations) == len(tokens["source"]), (
-        "Number of lines do not match (activations: %d, source: %d)!"
-        % (len(activations), len(tokens["source"]))
+    assert len(activations) == len(
+        tokens["source"]
+    ), "Number of lines do not match (activations: %d, source: %d)!" % (
+        len(activations),
+        len(tokens["source"]),
     )
 
     for num_deleted, line_idx in enumerate(sorted(skipped_lines)):
@@ -424,14 +440,18 @@ def load_data(
                 line_tokens = line_tokens[1:]
             tokens["target"].append(line_tokens)
 
-    assert len(tokens["source"]) == len(tokens["target"]), (
-        "Number of lines do not match (source: %d, target: %d)!"
-        % (len(tokens["source"]), len(tokens["target"]))
+    assert len(tokens["source"]) == len(
+        tokens["target"]
+    ), "Number of lines do not match (source: %d, target: %d)!" % (
+        len(tokens["source"]),
+        len(tokens["target"]),
     )
 
-    assert len(activations) == len(tokens["source"]), (
-        "Number of lines do not match (activations: %d, source: %d)!"
-        % (len(activations), len(tokens["source"]))
+    assert len(activations) == len(
+        tokens["source"]
+    ), "Number of lines do not match (activations: %d, source: %d)!" % (
+        len(activations),
+        len(tokens["source"]),
     )
 
     # Check if all data is well formed (whether we have activations + labels for
@@ -519,14 +539,18 @@ def load_sentence_data(source_path, labels_path, activations):
             line_tokens = line.strip().split()
             tokens["target"].append(line_tokens)
 
-    assert len(tokens["source"]) == len(tokens["target"]), (
-        "Number of lines do not match (source: %d, target: %d)!"
-        % (len(tokens["source"]), len(tokens["target"]))
+    assert len(tokens["source"]) == len(
+        tokens["target"]
+    ), "Number of lines do not match (source: %d, target: %d)!" % (
+        len(tokens["source"]),
+        len(tokens["target"]),
     )
 
-    assert len(activations) == len(tokens["source"]), (
-        "Number of lines do not match (activations: %d, source: %d)!"
-        % (len(activations), len(tokens["source"]))
+    assert len(activations) == len(
+        tokens["source"]
+    ), "Number of lines do not match (activations: %d, source: %d)!" % (
+        len(activations),
+        len(tokens["source"]),
     )
 
     # Check if all data is well formed (whether we have activations + labels for
