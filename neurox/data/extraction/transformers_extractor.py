@@ -12,7 +12,7 @@ Can also be invoked as a script as follows:
 import argparse
 import sys
 
-sys.append('NeuroX/')
+sys.path.append('NeuroX/')
 
 import numpy as np
 import torch
