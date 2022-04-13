@@ -323,6 +323,12 @@ def main():
         default="float32",
         help="Output dtype of the extracted representations",
     )
+    parser.add_argument(
+        "--output-type",
+        choices=["hdf5", "json"],
+        default="hdf5",
+        help="Output format of the extracted representations",
+    )
     parser.add_argument("--disable_cuda", action="store_true")
     parser.add_argument("--ignore_embeddings", action="store_true")
     parser.add_argument(
