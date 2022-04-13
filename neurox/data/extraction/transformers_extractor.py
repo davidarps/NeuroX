@@ -324,7 +324,7 @@ def main():
         help="Output dtype of the extracted representations",
     )
     parser.add_argument(
-        "--output-type",
+        "--output_type",
         choices=["hdf5", "json"],
         default="hdf5",
         help="Output format of the extracted representations",
