@@ -11,7 +11,7 @@ import numpy as np
 import torch
 
 
-def load_activations(activations_path, num_neurons_per_layer=None, is_brnn=False, dtype=None):
+def load_activations(activations_path, num_neurons_per_layer=None, is_brnn=False, dtype=None, layerSelection=None):
     """Load extracted activations.
 
     Parameters
@@ -27,6 +27,9 @@ def load_activations(activations_path, num_neurons_per_layer=None, is_brnn=False
         Only implemented for hdf5 and json files. Default: None
         None if the dtype of the activation should be the same dtype as in the activations file (only relevant for hdf5)
         'float16' or 'float32' to enforce half-precision or full-precision floats
+    layerSelection: tuple [i,j] or String. If not None and if loading from hdf5, activations will be loaded only from 
+        layers i to j-1. If layerSelection="Second" or layerSelection="Third", activations will be loaded from every 
+        second/third layer.
 
 
     Returns
@@ -98,9 +101,20 @@ def load_activations(activations_path, num_neurons_per_layer=None, is_brnn=False
         activations = []
         if dtype == None:
             dtype=representations[list(sentence_to_index.values())[0]].dtype
+        # If only certain layers are loaded, get either a range of layers [2,3,4,5,6] or every 2nd/3rd layer [0,3,6,9,12]
+        if layerSelection is not None and layerSelection.lower() in ["second", "third"]:
+            layerSel = [] 
+            k = 2 if layerSelection.lower()=="second" else 3
+            for i in range(num_layers): 
+                if i % k == 0: 
+                    layerSel.append(i) 
+        elif layerSelection is not None:
+            layerSel = list(range(layerSelection[0],layerSelection[1]))
         # TODO: Check order
         for _, value in sentence_to_index.items():
             sentence_acts = torch.FloatTensor(representations[value])
+            if layerSelection is not None:
+                sentence_acts = sentence_acts[layerSel,:,:]
             num_layers, sentence_length, embedding_size = (
                 sentence_acts.shape[0],
                 sentence_acts.shape[1],
@@ -112,6 +126,7 @@ def load_activations(activations_path, num_neurons_per_layer=None, is_brnn=False
                 sentence_length, num_layers * embedding_size
             )
             activations.append(sentence_acts.numpy().astype(dtype))
+            del sentence_acts
         num_layers = len(activations[0][0]) / num_neurons_per_layer
     elif file_ext == "json":
         dtype = 'float32' if dtype==None else dtype
