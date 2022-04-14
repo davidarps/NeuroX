@@ -99,6 +99,7 @@ def load_activations(activations_path, num_neurons_per_layer=None, is_brnn=False
         representations = h5py.File(activations_path, "r")
         sentence_to_index = json.loads(representations.get("sentence_to_index")[0])
         activations = []
+        num_layers = representations[list(sentence_to_index.values())[0]].shape[0]
         if dtype == None:
             dtype=representations[list(sentence_to_index.values())[0]].dtype
         # If only certain layers are loaded, get either a range of layers [2,3,4,5,6] or every 2nd/3rd layer [0,3,6,9,12]
