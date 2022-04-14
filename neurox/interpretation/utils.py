@@ -227,6 +227,8 @@ def create_tensors(
                 idx2label = {1: binarized_tag, 0: "OTHER"}
             else:
                 label2idx = tok2idx(target_tokens)
+                out_of_class_idx = max(label2idx.values()) + 1
+                label2idx[task_specific_tag] = out_of_class_idx
                 idx2label = idx2tok(label2idx)
 
         src2idx = tok2idx(source_tokens)
