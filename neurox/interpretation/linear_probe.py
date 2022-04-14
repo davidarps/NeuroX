@@ -378,8 +378,8 @@ def evaluate_probe(
         class and their associated scores are also part of the dictionary.
     predictions : list of 3-tuples, optional
         If ``return_predictions`` is set to True, this list will contain a
-        3-tuple for every input sample, representing
-        ``(source_token, predicted_class, was_predicted_correctly)``
+        4-tuple for every input sample, representing
+        ``(source_token, was_predicted_correctly, true_label, pred_label)``
 
     """
     progressbar = utils.get_progress_bar()
@@ -447,7 +447,7 @@ def evaluate_probe(
                     src_word = next(src_words)
                 else:
                     src_word = src_word + 1
-                predictions.append((src_word, key, labels[i].item() == idx))
+                predictions.append((src_word, labels[i].item() == idx, key, idx_to_class[predicted[i].item()]))
 
     y_pred = np.array(y_pred)
 
