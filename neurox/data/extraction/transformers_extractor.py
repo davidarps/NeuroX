@@ -19,7 +19,7 @@ import torch
 
 
 from tqdm import tqdm
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModel, BertConfig, BertModel
 
 from neurox.data.writer import ActivationsWriter
 
@@ -57,12 +57,26 @@ def get_model_and_tokenizer(model_desc, device="cpu", random_weights=False):
     else:
         model_name = model_desc[0]
         tokenizer_name = model_desc[1]
-    model = AutoModel.from_pretrained(model_name, output_hidden_states=True).to(device)
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+
 
     if random_weights:
         print("Randomizing weights")
-        model.init_weights()
+        bert_config = BertConfig()
+        print('create a random BERT model')
+        random_model = BertModel(bert_config)
+
+        print('load a trained BERT model')
+        trained_model = BertModel.from_pretrained('bert-base-uncased')
+
+        print('set embeddings of random BERT model')
+        random_model.set_input_embeddings(trained_model.get_input_embeddings())
+        model = random_model
+
+        print('load BERT tokenizer')
+        tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+    else:
+        model = AutoModel.from_pretrained(model_name, output_hidden_states=True).to(device)
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
 
     return model, tokenizer
 
